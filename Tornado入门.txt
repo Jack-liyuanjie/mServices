@@ -1,0 +1,151 @@
+安装
+pip install tornado==4.5 -i http://mirrors.aliyun.com/pypi/simple
+from tornado.web import Application
+from tornado.ioloop import IOLoop
+from tornado.web import RequestHandler
+
+
+class IndexHandler(RequestHandler):
+    def get(self):
+        # 向客户端响应数据
+        self.write('<h3>Hello,Tornado</h3>')
+
+
+if __name__ == '__main__':
+    # 创建WEB应用
+    app = Application([
+        ('/', IndexHandler)
+    ])
+    # 绑定端口
+    app.listen(7000)
+
+    # 启动Web服务
+    print('starting http://localhost:%s' % 7000)
+
+    IOLoop.current().start()
+
+一，Tornado请求与响应
+1.1请求的参数如何获取
+1.1.1 参数的来源
+RequestHandler对象中提供的方法来获取
+RequestHandler对象中的request对象的字典来获取
+    request是HTTPServerRequest类对象
+    request所以的信息以字典格式储存，且value的数据类型都是字节类型
+        arguments
+        query_arguments
+        body_arguments
+1.1.2 读取参数数据方式
+根据不同额请求方式来获取不同的请求参数
+    self.get_argument()/get_arguments()可以获取任何请求方式的请求参数
+    self.get_query_argument()/get_query_arguments() 可以get请求的查询参数
+    self.get_body_arguments() 可以获取put/post方法的表单参数
+
+1.2请求对象包含哪些信息
+字典类型
+arguments（query_arguments/body_arguments）
+headers
+cookies
+files
+
+普通类型
+remote_ip
+path
+method
+host
+host_name
+
+1.3cookie和header如何读取与设置
+Cookie的设置和读取
+self.get_cookie(name,path,domain)
+self.set_cookie(name.value.path,domain)
+self.request.cookies 获取所有cookie
+self.clear_cookie(name,path,domain) 删除
+
+Header的设置和读取
+self.set_header(name,value)
+self.request.headers.get()
+self.clear_header()
+
+1.4响应的信息如何设置
+self.write()
+self.set_status(code)
+self.set_header(name,value)
+self.set_cookie(name,value)
+
+1.5重定向
+self.redirect('/')
+
+二，路由规则
+路由则表示为url，在url中可以使用正则向后端服务处理函数传入变量参数。类似于flask的path的变量。
+在Application的handlers中指定的路由url可以配置变量，必须是一个分组
+return tornado.web.Application([
+    (r'/order/(\d+)', OrderHandler)
+], default_host=tornado.options.options.host)
+
+class OrderHandler(tornado.web.RequestHandler):
+    def get(self, code):
+        self.write('查询')
+
+在指定方法处理函数中，必须提供接收url路径中的变量值的参数，如get()方法的code参数
+如果url路由中存在多个变量，在方法的参数列表也应该是多个，且由左到右一次对应接收。
+但是，如果正则分组中声明了分组名，则按名称传值。即分组名就是函数的参数名
+def make_app():
+    return tornado.web.Application([
+        (r'/order/(?P<action_code>\d+)/(?P<order_id>\d+)', OrderHandler)
+    ], default_host=tornado.options.options.host)
+
+def get(self, order_id, action_code):
+
+三,请求切入点【了解】
+说明:每次请求都会创建新的RequestHandler子类的对象，
+1.initialize()
+在调用对应的行为方法(get,post)之前
+都会调用它（RequestHandler子类对象）的initialize()方法来初始化
+2.prepare()
+预处理的方法，在initialize()之后，行为方法之前调用的
+主要用于验证参数，权限，读取缓存等
+3.on_finish()
+请求处理完成后，释放资源的方法，在行为方法完成后调用。
+
+四,API接口设计
+任务：通过api接口可以实现用户登录，用户的注册，用户信息的变更和口令修改，及用户注销
+接口：/user
+1.用户登录
+    请求方法：GET
+    请求参数：
+        参数名          类型      是否必选
+        name           String   必须
+        pwd            String   必须
+        mobile_type    int      可选；手机os类型，如android：1，ios：2， pc：3
+    响应数据(json格式)：
+    {
+        "msg": "success",
+        "token": "adkdkaid1k1k1ka00"
+    }
+2.用户注册
+    请求方法：POST
+3.信息变更(用户名，手机号，城市)
+    请求方法：PUT
+4.修改口令
+    请求方法：PUT
+5.用户注销
+    请求方法：Delete
+------------------------------------------------------------------------------------------------------------------------
+4.1 接收json数据
+ # 读取json数据
+        bytes = self.request.body  # 字节码类型
+ # 从请求头中读取请求上传的数据类型
+        content_type = self.request.headers.get('Content-Type')
+ # 字节码类型转字符串
+        json_str = bytes.decode('utf-8')
+ # 反序列化
+        json_data = json.loads(json_str)
+
+4.2 返回json数据
+self.write({
+    'msg': 'success'
+})
+# 设置响应头，content—Type为application/json 表示响应数据是json格式
+self.set_header('Content-Type', 'application/json')
+
+4.3 解决跨域请求问题

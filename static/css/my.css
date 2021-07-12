@@ -1,0 +1,46 @@
+.error{
+    color: red;
+}
+.wrong{
+    color: orangered;
+}
+.success{
+    color: green;
+}
+nav ul, li{
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+nav ul{
+    background-color: lightgray;
+    height: 35px;
+}
+nav li{
+    float: left;
+    padding: 5px;
+    background-color: lightgray;
+}
+nav li:hover{
+    border: 1px solid green;
+    border-radius: 5px;
+    background-color: green;
+}
+#override{
+    width: 100%;
+    height: 500px;
+    border: solid 2px;
+}
+#left{
+    width: 20%;
+    height: 490px;
+    border: 1px solid dodgerblue;
+    float: left;
+}
+iframe{
+    
+    width: 80%;
+    height: 490px;
+    float: left;
+}
+

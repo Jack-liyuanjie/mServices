@@ -106,6 +106,10 @@ def get(self, order_id, action_code):
 主要用于验证参数，权限，读取缓存等
 3.on_finish()
 请求处理完成后，释放资源的方法，在行为方法完成后调用。
+4.set_default_headers()
+
+1.2 如何删除客户端中的cookie的token对象
+self.clear_cookie('token')
 
 四,API接口设计
 任务：通过api接口可以实现用户登录，用户的注册，用户信息的变更和口令修改，及用户注销
@@ -149,3 +153,365 @@ self.write({
 self.set_header('Content-Type', 'application/json')
 
 4.3 解决跨域请求问题
+
+
+
+项目结构设计
+apiserver
+    |---app
+        |---views
+            |---__init__.py
+        |---models
+            |---__init__.py
+    |---static
+    |---templates
+    |---utils
+    |---manage.py
+
+在app的init.py脚本中，创建tornado.web.Application类对象，并设置初始化的参数
+    handlers设置路由与请求处理类的列表
+    default_host设置WEB服务的host名称或地址
+    debug设置是否调试模式，True是调试模式，False是生产
+    template_path设置模板文件所在路径
+    static_path设置静态资源所在的目录
+    static_url_prefix设置客户端请求静态资源的url前缀
+    ui_modules注册ui组件，是字典类型。
+
+模板
+支持jinja2的模板语法。
+支持的语法：
+    填充{{变量名}}
+    表达式:要求表达式必须符合python语法要求
+        {{1+1}}
+        {{'hello,disen'[-5:]}}
+        {{', '.join([str(x**2) for x in range(10)])}}
+        注意：模板的变量不支持点语法，对于字典的key访问，应该是dict[key]访问
+    分支
+        {% if 条件表达式 %} html标签 {% end %}
+        {% if 条件表达式 %} html标签 {% else %} html标签 {% end %}
+        {% if 条件表达式 %} html标签 {% elif 条件表达式 %} 标签 {% else %} 标签 {% end %}
+    循环
+        for循环
+        {% for val in vals %}
+            标签{{ val }}
+        {% end %}
+支持的函数：
+    escape(val)
+    json_encode(val)
+    static_url()生成静态资源的路径
+支持'块'和替换
+    {% block 名称%}{% end %}
+    {% extends "base.html" %}
+
+
+支持UI组件开发
+定义UI组件
+在app的包下创建ui包，将自定义UI组件类都在ui包下
+from tornado.web import UIModule
+
+class NavModule(UIModule):
+    def render(self, menus):
+        return self.render_string('ui/nav.html',
+                                  menus=menus)
+
+注意：要在templates/ui目录下创建nav.html文件，内容如下：
+<nav>
+    <ul>
+        {% for menu in menus %}
+        <li>{{ menu }}</li>
+        {% end %}
+    </ul>
+</nav>
+因为在nav.html模板文件中使用menus变量，所以在调用此UI组件时，需要传入menus
+
+注册UI组件
+settings = {
+    'debug': True,
+    'template_path': os.path.join(BASE_DIR, 'templates'),
+    'static_path': os.path.join(BASE_DIR, 'static'),
+    'static_url_prefix': '/s/',
+    'ui_modules': {
+        'Nav': NavModule
+    }
+}
+在Application初始化参数中使用"ui_modules"来注册UI组件，并设置UI组件名称，如Nav
+使用UI组件
+在index.html模板中使用，内容如下：
+{% extends 'base.html' %}
+{% block nav %}
+    {% module Nav(menus) %}
+{% end %}
+
+其中{% module Nav(menus) %}是引入UI组件
+
+
+三,数据模型ORM
+配置SQLAlchemy
+1.数据连接配置
+mysql+pymysql://root:123456@localhost:3306/database
+2.创建连接，引擎，create_engine(链接地址)from sqlalchemy import create_engine
+3.创建会话对象
+DbSession = sessionmaker(bind=engine)
+session = DbSession()
+from sqlalchemy.orm improt sessionmaker
+4.创建模型类的Base基类
+Base = declarative_base(bind=engine)
+from sqlalchemy.ext.declarative import declarative_base
+
+定义模型类必须继承Base
+模型中使用的数据类型需要从sqlalchemy包中导入
+from sqlalchemy import Column, Integer, String, Text, ForeignKey
+from utils.conn import Base
+from sqlalchemy.orm import relationship
+
+class Menu(Base):
+    __tablename__ = 'Menu'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String(20), unique=True, nullable=False)
+    url = Column(String(50), unique=True)
+    note = Column(Text)
+    parent_id = Column(Integer, ForeignKey('Menu.id', name='parent_id_fk'),
+                       default=0, server_default='0')
+
+    childs = relationship('Menu')
+
+在测试控制台中创建表
+from app.models.menu import Menu
+from utils.conn import engine
+from utils.conn import Base
+创建表
+Base.metadata.create_all()
+删除表
+Base.metabase.drop_all()
+
+3.1安装包
+pip install sqlalchemy -i https://mirrors.aliyun.com/pypi/simple
+
+
+3.5 CURD的实战
+任务要求：
+实现菜单表的CURD操作
+实现用户的管理，角色的管理，权限管理(用户，角色和菜单)
+实现用户登录，不同角色的用户登录之后，所看到的菜单是不同的。
+
+
+WEB后端服务第10天
+一，WEB异步服务编程
+1.1概念
+1.1.1 并行与并发的概念
+并行指多个任务同时在运行，一般指的是多进程(多核cpu)，
+当然多线程也可以并行运行(受GIL全局解释器锁，即同一时间点只能有一个线程在运行)
+
+并发指在一定的时间段内，多个任务需要同时运行，一般指的是多线程。特别是C10k
+如何解决高并发：异步+消息队列RabbbitMQ。
+1.1.2 同步与异步的概念
+同步指程序调用某一任务时，要等待这个任务完成并返回后，程序再继续向下执行
+异步指程序调用某一任务时，不需要等待这个任务完成，程序继续向下执行。异步操作时，可以指定回调接口(函数)，
+并任务完成后，调用回调接口回传任务完成后的数据。
+1.1.3协程
+协程是"微线程",不需要CPU调度，由事件循环器EventLoop（来源于IO多路复用）来监督，由用户自己调度。
+python从3.4之后，提供协程包，asyncio库，声明某一函数是协程则需要
+@asyncio.coroutine修饰或 async标识，如果再协程中设用哪一个协程则使用yield from 或者 await标识.
+案例：
+# 协程包
+import asyncio
+# 网路请求包
+import requests
+
+async def download(url):
+    print('%s 下载中' % url)
+    await asyncio.sleep(1)
+    resp = requests.get(url)
+    return resp.content, resp.status_code
+
+@asyncio.coroutine
+def write_file(filename, content):
+    with open(filename, 'wb') as f:
+        f.write(content)
+    print(filename, 'Write OK')
+
+@asyncio.coroutine
+def save(url, filename):
+    # print('%s 下载中' % url)
+    content, code = yield from download(url)
+    print(url, code)
+    yield from write_file(filename, content)
+    print(url, filename, '保存成功')
+
+if __name__ == '__main__':
+    # 获取事件循环器对象
+    loop = asyncio.get_event_loop()
+
+    loop.run_until_complete(asyncio.wait([
+        save('https://www.baidu.com', 'baidu.html'),
+        save('https://jd.com', 'jd.html'),
+        save('https://mail.qq.com', 'qq_mail.html'),
+    ]))
+---------------------------------------------------------------------------------
+发起同步请求
+client = tornado.httpclient.HTTPClient() 创建客户对象
+response = client.fetch(url) 发送请求，并获取response
+案例：
+from tornado.web import RequestHandler
+
+# 同步请求客户端
+from tornado.httpclient import HTTPClient, HTTPResponse, HTTPRequest
+
+
+# import ssl
+# ssl._create_default_https_context = ssl._create_unverified_context
+
+
+# 同步请求案例
+class DownloadHandler(RequestHandler):
+    def get(self):
+        # 获取查询参数中的url（下载资源的网址）
+        url = self.get_query_argument('url')
+        # 参数里面添加filename
+        filename = self.get_query_argument('filename', 'index.html')
+
+        # 发起同步请求
+        client = HTTPClient() # 同步请求也可以使用request.get()
+        # validate_cert 是否验证ssl安全连接的证书
+        response: HTTPResponse = client.fetch(url, validate_cert=False)  # validate验证证书为Flase
+        # print(response.body)
+        # 保存到static/downloads
+        from app import BASE_DIR, os
+        dir = os.path.join(BASE_DIR, 'static/downloads')
+        with open(os.path.join(dir, filename), 'wb') as f:
+            f.write(response.body)
+        self.write('下载成功')
+---------------------------------------------------------------------------------------------------------
+发起异步请求
+from tornado.httpclient import AsyncHTTPClient
+from tornado.web import RequestHandler, asynchronous
+
+client = tornado.httpclient.AsyncHTTPClient()
+client.fetch(url,callback)
+callback是回调函数，即当获取响应的数据时调用此函数
+callback函数中必须接收一个response对象
+在异步请求时需要使用@tornado.web.asynchronous修饰，表示不会关闭连接
+在回调函数时需要调用self.finish()手动关闭
+# 异步请求案例AsyncHTTPClient
+class AsyncDownloadHandler(RequestHandler):
+
+    def save(self,response: HTTPResponse):
+        # print(response.effective_url, '下载成功')
+        self.write('<br>下载完成，正在保存')
+
+        # 在回调函数中，可以获取请求的查询参数
+        filename = self.get_query_argument('filename', 'index.html')
+
+        # 保存到static/downloads
+        from app import BASE_DIR, os
+        dir = os.path.join(BASE_DIR, 'static/downloads')
+        with open(os.path.join(dir, filename), 'wb') as f:
+            f.write(response.body)
+
+        self.write('<br>保存文件成功')
+        # 调用finish()给它一个响应，手动关闭连接
+        self.finish()
+
+    @asynchronous # 让请求方法变成长链接，等待finish()的出现，才会关闭
+    def get(self):
+        # 获取查询参数中的url（下载资源的网址）
+        url = self.get_query_argument('url')
+
+        # 发起异步请求
+        client = AsyncHTTPClient()
+        # validate_cert 是否验证ssl安全连接的证书
+        client.fetch(url,
+                     callback=self.save,
+                     validate_cert=False)  # validate验证证书为Flase
+
+        self.write('下载中...')
+        self.set_status(200)
+------------------------------------------------------------------------------------------------------------------------
+扩展协程处理方法
+处理方法需要使用协程修饰器修饰
+client.fetch()方法前使用yield
+不需要指定回调函数,因为yield会返回fetch()结果
+# 协程处理
+class XcDownloadHandler(RequestHandler):
+
+    def save(self,response: HTTPResponse):
+        # print(response.effective_url, '下载成功')
+        self.write('<br>下载完成，正在保存')
+
+        # 在回调函数中，可以获取请求的查询参数
+        filename = self.get_query_argument('filename', 'index.html')
+
+        # 保存到static/downloads
+        from app import BASE_DIR, os
+        dir = os.path.join(BASE_DIR, 'static/downloads')
+        with open(os.path.join(dir, filename), 'wb') as f:
+            f.write(response.body)
+
+        self.write('<br>保存文件成功')
+        # 调用finish()给它一个响应，手动关闭连接
+        self.finish()
+
+    @asynchronous
+    async def get(self):
+        # 获取查询参数中的url（下载资源的网址）
+        url = self.get_query_argument('url')
+
+        # 发起异步请求
+        client = AsyncHTTPClient()
+        # validate_cert 是否验证ssl安全连接的证书
+        response = await client.fetch(url, validate_cert=False)  # validate验证证书为Flase
+        self.write('下载中...')
+        self.save(response)
+        self.set_status(200)
+
+---------------------------------------------------------------------------------------------------
+socket 通信
+服务的代码：
+import socket
+
+# 1. 创建socket（实现网络间的通信，还可以实现进程间的通信）
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+# 2. 绑定端口host和port端口
+server.bind(('192.168.124.11', 8000))
+
+# 3. 监听
+server.listen()
+
+# 4. 等待接收客户端的连接
+print('服务器已启动，等待连接。。。')
+client, address = server.accept()  # 阻塞的方法
+print('%s 已连接' % address[0])
+msg = client.recv(4096)
+print(msg.decode('utf-8'))
+
+# 5. 向客户端发送消息
+client.send('您好。我是小AI同学,很高兴认识您'.encode('utf-8'))
+
+# 6. 等待客户端发来消息
+msg = client.recv(4096)  # 阻塞方法
+print(address, '说：', msg.decode('utf-8'))
+
+client.close()
+server.close()
+
+客户端代码：
+import socket
+
+# 1.创建socket
+socket = socket.socket()
+
+# 2. 连接服务器
+socket.connect(('192.168.124.11', 8000))
+socket.send(b'connect')
+
+# 3.接收数据
+msg = socket.recv(4096) # 阻塞方法
+print('Server:', msg.decode('utf-8'))
+
+# 4.向服务端发送数据
+socket.send('您好，我想听首张学友的歌'.encode('utf-8'))
+
+# 关闭
+socket.close()

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>index page</title>
+    <link rel="stylesheet" href="{{ static_url('css/my.css') }}">
+</head>
+<body>
+<p>我是主页</p>
+<nav>
+<ul>
+    {% for menu in menus %}
+        <li>{{ menu }}</li>
+    {% end %}
+</ul>
+</nav>
+<br>
+<p>
+    {{ msg }}
+</p>
+<p>
+    {{ 'hi,disen'[-4:] }}
+</p>
+<p>
+    {{ len('hi,disen') }}
+</p>
+<p>
+    {{', '.join([str(x**2) for x in range(10)])}}
+</p>
+<p>
+    {% if error_msg %}
+        <span class="error">{{ error_msg }}</span>
+    {% else %}
+        <span class="error">来对地方了</span>
+    {% end %}
+</p>
+<p>
+    {% if age<18 %}
+        <span class="error">未成年请自觉</span>
+    {% elif age>60 %}
+        <span class="wrong">老年人请自觉</span>
+    {% else %}
+        <span class="success">年轻人来对地方了</span>
+    {% end %}
+</p>
+<p>
+    {{ escape(code) }}
+</p>
+</body>
+</html>
